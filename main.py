@@ -11,7 +11,7 @@ import pyvisa
 
 def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
 
-    delay = 0.5
+    delay = 1
     rm = pyvisa.ResourceManager()
 
     l_resources = rm.list_resources()
@@ -53,7 +53,7 @@ def printMessage(message, headerStr, footerStr):
 
 def initializeK2400(k2400, compliance, nplcs, range):
 
-    delay = 0.1
+    delay = 0.5
 
     message = "Initializing the K2400 as Ampermeter....."
     printMessage(message,"*","*")
@@ -104,7 +104,7 @@ def initializeK2400(k2400, compliance, nplcs, range):
 
 def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
 
-    delay = 0.5
+    delay = 1
     term = ""
 
     message = "Initializing the HV Source....."
@@ -135,7 +135,7 @@ def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
 
 def readVoltageFromHVSource(hv_source):
 
-    delay = 0.5
+    delay = 0.75
     term = ""
 
     sendCommandToInstrument(hv_source,"STATUS,MU", term, 0, delay)
@@ -171,7 +171,7 @@ def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibl
 
 def getHVSourceStatus(hv_source):
 
-    delay = 0.5
+    delay = 1
     term = ""
 
     sendCommandToInstrument(hv_source,"STATUS,DI", term, 0, delay)
