@@ -5,7 +5,7 @@ import os  # standard library
 import sys
 from time import sleep
 import pyvisa
-
+import json
 
 # pyvisa.log_to_screen()
 
@@ -128,14 +128,13 @@ def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
     #set the actual voltage value to zero
     sendCommandToInstrument(hv_source,"U," + "{:.3f}".format(0) + "kV", term, 0, delay)
     sleep(delay)
-    waitForVoltageStabilization(hv_source, 0, 10)
+    waitForVoltageStabilization(hv_source, 0, 10, 0.5, 1)
 
     message = "Initializing done!!!"
     printMessage(message,"*","*")
 
-def readVoltageFromHVSource(hv_source):
+def readVoltageFromHVSource(hv_source, delay):
 
-    delay = 0.75
     term = ""
 
     sendCommandToInstrument(hv_source,"STATUS,MU", term, 0, delay)
@@ -156,18 +155,19 @@ def readVoltageFromHVSource(hv_source):
     voltage = float(voltageString) * 1000
     return voltage
 
-def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibleError):
+
+def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibleError, checkPeriod, lastDelay):
 
     stable = False
 
     while not stable:
-        readedVoltage = readVoltageFromHVSource(hv_source)
+        readedVoltage = readVoltageFromHVSource(hv_source, 0.5)
         error = abs(readedVoltage - desiredVoltage)
         # print("Error --> " + str(error) + "V. Max abs permissible error in volts is " + str(maxAbsolutePermissibleError) + "V.")
         if error<abs(maxAbsolutePermissibleError):
             stable = True
-        sleep(0.5)
-    sleep(1)
+        sleep(checkPeriod)
+    sleep(lastDelay)
 
 def getHVSourceStatus(hv_source):
 
@@ -225,10 +225,10 @@ def start_process(K2400_gpibAddress,
             print("Setting the H Source to --> " + "U," + "{:.3f}".format(nextVoltage/1000) + "kV")
             sendCommandToInstrument(hv_source,"U," + "{:.3f}".format(nextVoltage/1000) + "kV", term, 0, delay)
             actualVoltage = nextVoltage
-            waitForVoltageStabilization(hv_source,actualVoltage, 10) #maxAbsolutePermissibleError is 2V
+            waitForVoltageStabilization(hv_source,actualVoltage, 10, 0.5, 1) #maxAbsolutePermissibleError is 2V
 
             #Here you have to measure the hv_source volatge
-            hv_source_voltage = readVoltageFromHVSource(hv_source)
+            hv_source_voltage = readVoltageFromHVSource(hv_source, 0.5)
             print("Voltage source --> " + str(hv_source_voltage))
             #Here you have to measure the current of the k2400
             sendCommandToInstrument(k2400,":READ?",term,0,0.5)
@@ -260,28 +260,69 @@ def start_process(K2400_gpibAddress,
     # HV source off
     sendCommandToInstrument(hv_source,"HV,OFF", term, 0, delay)
 
-    waitForVoltageStabilization(hv_source, 0, 10)  # maxAbsolutePermissibleError is 10V
+    waitForVoltageStabilization(hv_source, 0, 10, 0.5, 1)  # maxAbsolutePermissibleError is 10V
 
     message = "Now HV Source is safe!!!!"
     printMessage(message, "*", "*")
+
+def readConfigFile(configFilePath):
+
+
+    # Opening JSON file
+    f = open(configFilePath)
+
+    jsonContent = json.load(f)
+
+    return (jsonContent["K2400_gpibAddress"],
+            jsonContent["HVSource_gpibAddress"],
+            jsonContent["initialVoltage"],
+            jsonContent["finalVoltage"],
+            jsonContent["pointsVoltage"],
+            jsonContent["rampVoltage"],
+            jsonContent["outputCurrentLimit"],
+            jsonContent["enableKill"],
+            jsonContent["ammeterRange"],
+            jsonContent["ammeterCompliance"],
+            jsonContent["ammeterNPLCs"],
+            jsonContent["resultsFilePath"],
+            jsonContent["resultsFilePathExtension"])
+
+
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    K2400_gpibAddress = 25
-    HVSource_gpibAddress = 20
-    initialVoltage = 0       #Volts
-    finalVoltage = 2000         #Volts
-    pointsVoltage = 10
-    rampVoltage = 200           #Volts/second
-    outputCurrentLimit = 0.025  #Amps
-    enableKill = True
-    ammeterRange = 0.000001     #Amps
-    ammeterCompliance = 0.001 #Amps
-    ammeterNPLCs = 10
-    resultsFilePath = "test"
-    resultsFilePathExtension = "csv"
+    configFilePath = "config.json"
+
+    K2400_gpibAddress, \
+    HVSource_gpibAddress, \
+    initialVoltage, \
+    finalVoltage, \
+    pointsVoltage, \
+    rampVoltage, \
+    outputCurrentLimit, \
+    enableKill, \
+    ammeterRange, \
+    ammeterCompliance, \
+    ammeterNPLCs, \
+    resultsFilePath, \
+    resultsFilePathExtension = readConfigFile(configFilePath)
+
+
+    # K2400_gpibAddress = 25
+    # HVSource_gpibAddress = 20
+    # initialVoltage = 0       #Volts
+    # finalVoltage = 2000         #Volts
+    # pointsVoltage = 10
+    # rampVoltage = 400           #Volts/second
+    # outputCurrentLimit = 0.025  #Amps
+    # enableKill = True
+    # ammeterRange = 0.000001     #Amps
+    # ammeterCompliance = 0.001 #Amps
+    # ammeterNPLCs = 10
+    # resultsFilePath = "test"
+    # resultsFilePathExtension = "csv"
 
     counter = 0
 
