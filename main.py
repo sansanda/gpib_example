@@ -4,15 +4,17 @@
 import os  # standard library
 import sys
 from time import sleep
+import time
+
 import pyvisa
 from termcolor import colored
-from watchDog import Watchdog
 from fileUtilities import readConfigFile
-from exceptionHandlers import voltageStabilizationTimeoutHandler
+
 # pyvisa.log_to_screen()
 
 voltageStabilizationTimeout = 10  # in s
 HVSourceSettingOFFTimeout = 60  # in s
+
 
 def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     delay = 0.1
@@ -27,7 +29,7 @@ def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     k2400 = None
 
     k2400 = rm.open_resource("GPIB0::" + str(k2400_gpibAddress) + "::INSTR", send_end=True)
-    sleep(delay)
+    #sleep(delay)
 
     sendCommandToInstrument(k2400, "*IDN?", "", 0, delay)
     response = k2400.read_raw()  # type(response) =--> bytes
@@ -35,7 +37,7 @@ def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     print(decoded_response)
 
     hv_source = rm.open_resource("GPIB0::" + str(hvSource_gpibAddress) + "::INSTR", send_end=True)
-    sleep(delay)
+    #sleep(delay)
 
     sendCommandToInstrument(hv_source, "ID", "", 0, delay)
     response = hv_source.read_raw()  # type(response) =--> bytes
@@ -52,13 +54,13 @@ def sendCommandToInstrument(instrument, command, terminator, delayBefore, delayA
 
 
 def printMessage(message, headerStr, footerStr):
-    print(colored(len(message) * headerStr,"magenta"))
-    print(colored(message,"magenta"))
-    print(colored(len(message) * footerStr,"magenta"))
+    print(colored(len(message) * headerStr, "magenta"))
+    print(colored(message, "magenta"))
+    print(colored(len(message) * footerStr, "magenta"))
 
 
 def initializeK2400(k2400, compliance, nplcs, range):
-    delay = 0.1
+    delay = 0.25 #seconds
 
     message = "Initializing the K2400 as Ampermeter....."
     printMessage(message, "*", "*")
@@ -109,7 +111,7 @@ def initializeK2400(k2400, compliance, nplcs, range):
 
 
 def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
-    delay = 1
+    delay = 0.25
     term = ""
 
     message = "Initializing the HV Source....."
@@ -131,29 +133,8 @@ def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
     sendCommandToInstrument(hv_source, "KILL," + 'EN' if enableKill else 'DIS', term, 0, delay)
     sleep(delay)
 
-    HVSource_OutputVoltageStabilization_Success = False
-
-    while not HVSource_OutputVoltageStabilization_Success:
-
-        # Actualizamos la tension en la fuente
-        print(colored("Setting the H Source to --> " + "U," + "{:.3f}".format(0) + "kV", "yellow"))
-        sendCommandToInstrument(hv_source, "U," + "{:.3f}".format(0) + "kV", term, 0, delay)
-        sleep(delay)
-
-        try:
-            print(colored("Starting the WatchDog for preventing infinitive loop in voltage stabilization...", "grey",
-                          "on_white"))
-            watchdog = Watchdog(HVSourceSettingOFFTimeout)  # because we want to set the hv source to zero
-            waitForVoltageStabilization(hv_source, 0, 10, 0.5, 1)  # maxAbsolutePermissibleError is 10V
-            HVSource_OutputVoltageStabilization_Success = True
-
-        except Watchdog:
-            # handle watchdog error
-            print(colored(
-                "Voltage Stabilization WatchDog has raised an exception. Voltage stabilization is taking too much time...",
-                "red"))
-
-        watchdog.stop()
+    # Setting output voltage to zero
+    setHVOutputVoltage(hv_source, 0, 60)
 
     message = "Initializing done!!!"
     printMessage(message, "*", "*")
@@ -180,34 +161,64 @@ def readVoltageFromHVSource(hv_source, delay=0.5):
             voltageString = voltageString.removeprefix("VALUE=")
             voltageString = voltageString.removesuffix("kV")
             voltage = float(voltageString) * 1000
-            print(colored("Lectura de voltage correcta en la fuente de HV. Voltage = " + str(voltage) + "V","green"))
+            print(colored("Lectura de voltage correcta en la fuente de HV. Voltage = " + str(voltage) + "V", "green"))
 
         else:
-            #la lectura del voltage ha fallado, esperamos y volvemos a pedir
-            print(colored("Fallo en la lectura de voltage a la fuente de HV. Esperamos un tiempo y solicitamos de nuevo...","red"))
+            # la lectura del voltage ha fallado, esperamos y volvemos a pedir
+            print(colored(
+                "Fallo en la lectura de voltage a la fuente de HV. Esperamos un tiempo y solicitamos de nuevo...",
+                "red"))
             sleep(1)
 
     return voltage
 
+def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibleError, checkPeriod, lastDelay,
+                                 voltageStabilizationTimeout=10):
+    """
+    Funcion sincrona cuya funcion basica es esperar a que la salida de tension de una fuente de alimentacion (en nuestro caso una hv_voltage)
+    entre dentro del rango de error permisible. Una vez la salida se encuentra dentro de dicho rango de error la funcion retorna True.
+    Por ejemplo: Si deriredVoltage = 1000V y nuestro maxAbsolutePermissibleError = 10V entonces la funcion retornara True en el momento
+    de leer un voltage en la fuente de alimentacion que se encuentre dentro del rango (990V,1010V). En nuestro caso un valor leido
+    en la salida de la fuente igual a 995V haría retornar True a la fuencion, por el contrario un valor leido a la salida de la fuente
+    igual a 880V mantendria a la funcion dentro del bucle de lectura de tension a la salida de la fuente.\n
+    Args:
+        hv_source (pyvisa.resource.resource): Instrumento
+        desiredVoltage (float): Voltaje nominal deseado a la salida de la fuente. Volts
+        maxAbsolutePermissibleError (float): Maximo error (absoluto) permitido a la salida de la fuente. Volts
+        checkPeriod (float): Periodo de chequeo del valor de voltaje a la salida de la fuente. Seconds
+        lastDelay (float): Tiempo de espera de seguridad una vez que la salida de la fuente se encuentra dentro del rango. Seconds
+        (desiredVoltage-maxAbsolutePermissibleError, desiredVoltage+maxAbsolutePermissibleError)
+        voltageStabilizationTimeout (long): Tiempo máximo dado a la funcion para chequear la salida de la fuente de alimentacion. Seconds
+    Returns:
+        True si el valor leido a la salida de la fuente de alimentacion se encuentra dentro del rango
+        (desiredVoltage-maxAbsolutePermissibleError, desiredVoltage+maxAbsolutePermissibleError) \n
+        False si el valor leido a la salida de la fuente de alimentación no llega a situarse dentro del rango
+        (desiredVoltage-maxAbsolutePermissibleError, desiredVoltage+maxAbsolutePermissibleError) y el tiempo de ejecucion
+        de la funcion supera o iguala el valor dado por el voltageStabilizationTimeout
+    """
 
-def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibleError, checkPeriod, lastDelay):
+    initialTime = time.time() * 1000
+    deadTime = initialTime + voltageStabilizationTimeout * 1000
 
-    stable = False
-    voltageStabilizationTimeout = 10000 #in ms
+    permissibleRange = (desiredVoltage - maxAbsolutePermissibleError, desiredVoltage + maxAbsolutePermissibleError)
 
-    #aqui deberiamos poner en marcha un timer a modo de watchdog con el voltageStabilizationTimeout
-    #que fuerce a la funcion a devolver falso si este timer salta
-
-    while not stable:
-        readedVoltage = readVoltageFromHVSource(hv_source)
-        error = abs(readedVoltage - desiredVoltage)
-        # print("Error --> " + str(error) + "V. Max abs permissible error in volts is " + str(maxAbsolutePermissibleError) + "V.")
-        if error < abs(maxAbsolutePermissibleError):
-            stable = True
+    while True:
         sleep(checkPeriod)
-    sleep(lastDelay)
 
-    #aqui deberiamos eliminar el timer
+        # primero chequeamos el timeout
+        actualTime = time.time() * 1000
+        if actualTime >= deadTime:
+            return False  # Se ha cumplido el timeout
+
+        # si no se ha cumplido el timeout miramos la tension a la salida de la fuente y comprobamos si se encuentra
+        # dentro del rango permitido
+        readedVoltage = readVoltageFromHVSource(hv_source)
+        if permissibleRange[0] < readedVoltage < permissibleRange[1]:
+            break
+
+    sleep(lastDelay)
+    return True
+
 
 def getHVSourceStatus(hv_source):
     delay = 1
@@ -217,6 +228,32 @@ def getHVSourceStatus(hv_source):
     response = hv_source.read_raw()
 
     return response
+
+
+def setHVOutputVoltage(hv_source, targetVoltage, voltageStabilizationTimeout=10):
+    """
+    Funcion sincrona que permite settear una determinada tension (targetVoltage) en la fuente de alimentacion (hv_source) y
+    espera a la estabiizacion de esta segun unos criterios definidos por un error, una frecuencia de actualizacion y un tiempo de timeout.\n
+    :param hv_source: pyvisa.resource.resorce como la fuente de alimentacion
+    :param voltage:   float con el voltage deseado a la salida de la fuente de alimentacion. Kv
+    :param voltageStabilizationTimeout: Tiempo de espera que toma la funcion para comprobar qe la salida de
+    la fuente de alimentacion ofrece el voltage deseado. Seconds
+    :return: None
+    """
+    term = ""
+    hvSource_OutputVoltageStabilization_Success = False
+
+    while not hvSource_OutputVoltageStabilization_Success:
+        # Actualizamos la tension en la fuente
+        print(colored("Setting the H Source to --> " + "U," + "{:.3f}".format(targetVoltage) + "kV", "yellow"))
+        sendCommandToInstrument(hv_source, "U," + "{:.3f}".format(targetVoltage) + "kV", term, 0, 0.5)
+        print(colored("Waiting for voltage stabilization...", "grey", "on_white"))
+        hvSource_OutputVoltageStabilization_Success = waitForVoltageStabilization(hv_source, targetVoltage*1000, 10, 1, 1,
+                                                                                   voltageStabilizationTimeout)  # maxAbsolutePermissibleError is 10V
+        if not hvSource_OutputVoltageStabilization_Success:
+            print(colored(
+                "Voltage Stabilization WatchDog has raised an exception. Voltage stabilization is taking too much time...",
+                "red"))
 
 
 def start_process(K2400_gpibAddress,
@@ -231,8 +268,7 @@ def start_process(K2400_gpibAddress,
                   ammeterCompliance,
                   ammeterNPLCs,
                   resultsFilePath):
-
-    delay = 0.5 # in s
+    delay = 0.5  # in s
     term = ""
 
     k2400, hv_source = getInstruments(K2400_gpibAddress, HVSource_gpibAddress)
@@ -262,35 +298,14 @@ def start_process(K2400_gpibAddress,
 
         else:
 
-            HVSource_OutputVoltageStabilization_Success = False
+            setHVOutputVoltage(hv_source, nextVoltage/1000, 10)
 
-            while not HVSource_OutputVoltageStabilization_Success:
-
-                # Actualizamos la tension en la fuente
-                print(colored("Setting the H Source to --> " + "U," + "{:.3f}".format(nextVoltage / 1000) + "kV","yellow"))
-                sendCommandToInstrument(hv_source, "U," + "{:.3f}".format(nextVoltage / 1000) + "kV", term, 0, delay)
-
-                try:
-                    print(colored("Starting the WatchDog for preventing infinitive loop in voltage stabilization...",
-                                  "grey", "on_white"))
-                    watchdog = Watchdog(voltageStabilizationTimeout)
-                    waitForVoltageStabilization(hv_source, nextVoltage, 10, 0.5, 1)  # maxAbsolutePermissibleError is 2V
-                    HVSource_OutputVoltageStabilization_Success = True
-
-                except Watchdog:
-                    # handle watchdog error
-                    print(colored("Voltage Stabilization WatchDog has raised an exception. Voltage stabilization is taking too much time...", "red"))
-
-                watchdog.stop()
-
-
-
-            #Una vez el voltaje de la fuente es estable a su salida podremos considerar que actualvoltage = nextvoltage
+            # Una vez el voltaje de la fuente es estable a su salida podremos considerar que actualvoltage = nextvoltage
             actualVoltage = nextVoltage
 
             # Here you have to measure the hv_source volatge
             hv_source_voltage = readVoltageFromHVSource(hv_source)
-            print(colored("Voltage source --> " + str(hv_source_voltage) + "V","cyan"))
+            print(colored("Voltage source --> " + str(hv_source_voltage) + "V", "cyan"))
             # Here you have to measure the current of the k2400
             sendCommandToInstrument(k2400, ":READ?", term, 0, 0.5)
             ammeter_response = k2400.read_raw()
@@ -300,7 +315,7 @@ def start_process(K2400_gpibAddress,
             ammeter_decoded_response = ammeter_decoded_response.split(",")
 
             ammeter_current = float(ammeter_decoded_response[1])
-            print(colored("Ammeter Current --> " + str(ammeter_current) + "A","cyan"))
+            print(colored("Ammeter Current --> " + str(ammeter_current) + "A", "cyan"))
 
             # Here you have to write to file
             f.write(str(hv_source_voltage) + "," + str(abs(ammeter_current)) + "\n")
@@ -318,41 +333,20 @@ def start_process(K2400_gpibAddress,
     message = "Powering off instruments!!!"
     printMessage(message, "*", "*")
 
-    hvSource_SettingOFF_Success = False
+    # Setting output voltage to zero
+    setHVOutputVoltage(hv_source, 0, 60)
 
-    while not hvSource_SettingOFF_Success:
-
-        # HV source off
-        sendCommandToInstrument(hv_source, "HV,OFF", term, 0, delay)
-
-        try:
-            print(colored("Starting the WatchDog for preventing infinitive loop in HV OFF process...", "grey",
-                          "on_white"))
-            watchdog = Watchdog(HVSourceSettingOFFTimeout)
-            waitForVoltageStabilization(hv_source, 0, 10, 0.5, 1)  # maxAbsolutePermissibleError is 10V
-            hvSource_SettingOFF_Success = True
-
-        except Watchdog:
-            # handle watchdog error
-            print(colored(
-                "Voltage Stabilization WatchDog has raised an exception. Voltage OFF Process is taking too much time...",
-                "red"))
-
-        watchdog.stop()
-
-
+    # HV source off
+    sendCommandToInstrument(hv_source, "HV,OFF", term, 0, delay)
 
     message = "Now HV Source is safe!!!!"
     printMessage(message, "*", "*")
 
 
-
-
-
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    configFilePath = "config.json"
+    process_config_file_path = "process_config_file.json"
 
     K2400_gpibAddress, \
     HVSource_gpibAddress, \
@@ -366,21 +360,7 @@ if __name__ == '__main__':
     ammeterCompliance, \
     ammeterNPLCs, \
     resultsFilePath, \
-    resultsFilePathExtension = readConfigFile(configFilePath)
-
-    # K2400_gpibAddress = 25
-    # HVSource_gpibAddress = 20
-    # initialVoltage = 0       #Volts
-    # finalVoltage = 1500         #Volts
-    # pointsVoltage = 50
-    # rampVoltage = 400           #Volts/second
-    # outputCurrentLimit = 0.025  #Amps
-    # enableKill = True
-    # ammeterRange = 0.000001     #Amps
-    # ammeterCompliance = 0.001 #Amps
-    # ammeterNPLCs = 10
-    # resultsFilePath = "test_mosfet"
-    # resultsFilePathExtension = "csv"
+    resultsFilePathExtension = readConfigFile(process_config_file_path)
 
     counter = 0
 
