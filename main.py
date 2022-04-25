@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os  # standard library
-import sys
+import os
+os.system('color')
+
 from time import sleep
 import time
 
