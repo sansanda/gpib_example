@@ -4,7 +4,7 @@
     "initialVoltage": 0,
     "finalVoltage": 10000,
     "pointsVoltage": 10,
-    "rampVoltage": 100,
+    "rampVoltage": 400,
     "outputCurrentLimit": 0.025,
     "enableKill": "True",
     "ammeterRange": 0.0001,

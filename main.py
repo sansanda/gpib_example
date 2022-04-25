@@ -61,50 +61,53 @@ def printMessage(message, headerStr, footerStr):
 
 def initializeK2400(k2400, compliance, nplcs, range):
     delay = 0.25 #seconds
+    term = ""
 
     message = "Initializing the K2400 as Ampermeter....."
     printMessage(message, "*", "*")
 
-    sendCommandToInstrument(k2400, "*CLS", "", 0, delay)
+    sendCommandToInstrument(k2400, "*CLS", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, "*SRE 4", "", 0, delay)
+    sendCommandToInstrument(k2400, "*SRE 4", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, "*ESE 0", "", 0, delay)
+    sendCommandToInstrument(k2400, "*ESE 0", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":STAT:OPER:ENAB 0", "", 0, delay)
+    sendCommandToInstrument(k2400, ":STAT:OPER:ENAB 0", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":STAT:MEAS:ENAB 0", "", 0, delay)
+    sendCommandToInstrument(k2400, ":STAT:MEAS:ENAB 0", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":STAT:QUES:ENAB 0", "", 0, delay)
+    sendCommandToInstrument(k2400, ":STAT:QUES:ENAB 0", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":FORM:SREG ASC", "", 0, delay)
+    sendCommandToInstrument(k2400, ":FORM:SREG ASC", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, "*RST", "", 0, delay)
+    sendCommandToInstrument(k2400, "*RST", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SYST:BEEP:STAT ON", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SYST:BEEP:STAT ON", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SOUR:FUNC VOLT", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SOUR:FUNC VOLT", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SOUR:VOLT:LEV 0", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SOUR:VOLT:LEV 0", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SOUR:VOLT:RANG 0.2", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SOUR:VOLT:RANG 0.2", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":FORM:ELEM VOLT, CURR, TIME", "", 0, delay)
+    sendCommandToInstrument(k2400, ":FORM:ELEM VOLT, CURR, TIME", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:FUNC:CONC ON", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:FUNC:CONC ON", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:FUNC:OFF:ALL", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:FUNC:OFF:ALL", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:FUNC:ON 'VOLT','CURR'", "", 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:FUNC:ON 'VOLT','CURR'", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":ROUTE:TERM REAR", "", 0, delay)
+    sendCommandToInstrument(k2400, ":ROUTE:TERM REAR", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:CURR:PROT " + "{:.4f}".format(compliance), "", 0, delay)  # AMPS
+    sendCommandToInstrument(k2400, ":SENS:CURR:PROT " + "{:.4f}".format(compliance), term, 0, delay)  # AMPS
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:VOLT:NPLC " + str(int(nplcs)), "", 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:VOLT:NPLC " + str(int(nplcs)), term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:CURR:RANG " + "{:.4f}".format(range), "", 0, delay)  # AMPS
+    sendCommandToInstrument(k2400, ":SENS:CURR:RANG " + "{:.4f}".format(range), term, 0, delay)  # AMPS
     sleep(delay)
+    # K2400 ON
+    sendCommandToInstrument(k2400, ":OUTP:STAT ON", term, 0, delay)
 
     message = "Initializing done!!!"
     printMessage(message, "*", "*")
@@ -273,8 +276,17 @@ def start_process(K2400_gpibAddress,
 
     k2400, hv_source = getInstruments(K2400_gpibAddress, HVSource_gpibAddress)
 
-    initializeK2400(k2400, ammeterCompliance, ammeterNPLCs, ammeterRange)
+
+    #!!!!!!!!!MUY IMPORTANTE. PARA PROTEGER LA TENSION QUE VEN LOS BORNES DEL AMPERIMETRO!!!!!!!!!!!!!!
+    #SIEMPRE AMMETER ON ANTES DE APLICAR VOLTAJE O INICIALIZAR LA FUENTE QUE PUEDE TENER VOLTAJE ALTO ANTES DE EMPEZAR EL PROCESO
+
+    # K2400 ON
+    sendCommandToInstrument(k2400, ":OUTP:STAT ON", term, 0, delay)
+
+    #importante inicializar primero la fuente de voltage para bajar a cero antes de inicializar el amperimetro
     initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill)
+    initializeK2400(k2400, ammeterCompliance, ammeterNPLCs, ammeterRange)
+
 
     # #calculo del step voltage
     stepVoltage = (finalVoltage - initialVoltage) / pointsVoltage
@@ -284,8 +296,6 @@ def start_process(K2400_gpibAddress,
 
     # HV source ON
     sendCommandToInstrument(hv_source, "HV,ON", term, 0, delay)
-    # K2400 ON
-    sendCommandToInstrument(k2400, ":OUTP:STAT ON", term, 0, delay)
 
     # Here you have to write to file
     f = open(resultsFilePath, "a")
@@ -298,7 +308,7 @@ def start_process(K2400_gpibAddress,
 
         else:
 
-            setHVOutputVoltage(hv_source, nextVoltage/1000, 10)
+            setHVOutputVoltage(hv_source, nextVoltage/1000, voltageStabilizationTimeout)
 
             # Una vez el voltaje de la fuente es estable a su salida podremos considerar que actualvoltage = nextvoltage
             actualVoltage = nextVoltage

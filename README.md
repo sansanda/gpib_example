@@ -1,16 +1,15 @@
 # gpib_example
 Prototipo Leakage HV_Source_Measure_
 
-version 1.1
+version 1.2
 
 Bug fixes:
 
-1. Problema de loop infinito en la llamada a la funcion waitForVoltageStabilization.
 
 News:
 
-1. Añadida funcion setHVOutputVoltage(hv_source, targetVoltage, voltageStabilizationTimeout=10)
-para ordenar y simplificar el mantenimiento del código
+2. Reorganizado el orden en que se ejecuta la configuracion de los instrumentos para proteger el amperimertro
+
 
 Next:
 
