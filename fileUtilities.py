@@ -14,6 +14,7 @@ def readConfigFile(configFilePath):
             jsonContent["initialVoltage"],
             jsonContent["finalVoltage"],
             jsonContent["pointsVoltage"],
+            jsonContent["measureDelay_ms"],
             jsonContent["rampVoltage"],
             jsonContent["outputCurrentLimit"],
             jsonContent["enableKill"],

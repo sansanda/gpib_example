@@ -8,6 +8,7 @@ from time import sleep
 import time
 
 import pyvisa
+
 from termcolor import colored
 from fileUtilities import readConfigFile
 
@@ -30,6 +31,7 @@ def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     k2400 = None
 
     k2400 = rm.open_resource("GPIB0::" + str(k2400_gpibAddress) + "::INSTR", send_end=True)
+    k2400.timeout = 25000 #si configuramos el k2400 con filtro y nplcs altos, necesitaremos tiempos de timeout altos tambien
     #sleep(delay)
 
     sendCommandToInstrument(k2400, "*IDN?", "", 0, delay)
@@ -99,16 +101,29 @@ def initializeK2400(k2400, compliance, nplcs, range):
     sleep(delay)
     sendCommandToInstrument(k2400, ":SENS:FUNC:ON 'VOLT','CURR'", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":ROUTE:TERM REAR", term, 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:CURR:NPLC " + str(int(nplcs)), term, 0, delay)
     sleep(delay)
+
+
+    sendCommandToInstrument(k2400,":SENSe:AVERage:TCONtrol REPeat", term, 0, delay)
+    sleep(delay)
+    sendCommandToInstrument(k2400,":SENSe:AVERage:COUNt 8", term, 0, delay)
+    sleep(delay)
+    sendCommandToInstrument(k2400,":SENSe:AVERage ON", term, 0, delay)
+    sleep(delay)
+
     sendCommandToInstrument(k2400, ":SENS:CURR:PROT " + "{:.4f}".format(compliance), term, 0, delay)  # AMPS
-    sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:VOLT:NPLC " + str(int(nplcs)), term, 0, delay)
     sleep(delay)
     sendCommandToInstrument(k2400, ":SENS:CURR:RANG " + "{:.4f}".format(range), term, 0, delay)  # AMPS
     sleep(delay)
+    sendCommandToInstrument(k2400, ":ROUTE:TERM REAR", term, 0, delay)
+    sleep(delay)
     # K2400 ON
     sendCommandToInstrument(k2400, ":OUTP:STAT ON", term, 0, delay)
+
+    # :SENSe: AVERage:TCONtrol < type >
+    # :SENSe: AVERage:COUNt < n >
+    # :SENSe: AVERage < state >
 
     message = "Initializing done!!!"
     printMessage(message, "*", "*")
@@ -265,6 +280,7 @@ def start_process(K2400_gpibAddress,
                   initialVoltage,
                   finalVoltage,
                   pointsVoltage,
+                  measureDelay_ms,
                   rampVoltage,
                   outputCurrentLimit,
                   enableKill,
@@ -272,6 +288,7 @@ def start_process(K2400_gpibAddress,
                   ammeterCompliance,
                   ammeterNPLCs,
                   resultsFilePath):
+
     delay = 0.5  # in s
     term = ""
 
@@ -302,14 +319,30 @@ def start_process(K2400_gpibAddress,
     f = open(resultsFilePath, "a")
     f.truncate(0)
 
+    #mean_current calculation
+    previous_current = 0.0
+    sum_current = 0.0
+    mean_current = 0.0
+    n_steps = 0
+
+    #current threshold in percent of current value
+    current_threshold = 5000
+    current_overflow = False
+
+    #file format
+    sep = "\t"
+
     while not finalProcess:
 
-        if nextVoltage > finalVoltage:
+        if nextVoltage > finalVoltage or current_overflow:
             finalProcess = True
 
         else:
 
             setHVOutputVoltage(hv_source, nextVoltage/1000, voltageStabilizationTimeout)
+
+            print(colored("Waiting for measure delay = " + str(measureDelay_ms/1000) + " seconds", "grey", "on_white"))
+            sleep(measureDelay_ms/1000)
 
             # Una vez el voltaje de la fuente es estable a su salida podremos considerar que actualvoltage = nextvoltage
             actualVoltage = nextVoltage
@@ -326,13 +359,27 @@ def start_process(K2400_gpibAddress,
             ammeter_decoded_response = ammeter_decoded_response.split(",")
 
             ammeter_current = float(ammeter_decoded_response[1])
+            if n_steps == 0:
+                previous_current = ammeter_current
+
+            print(colored("Previous Current --> " + str(previous_current) + "A", "cyan"))
             print(colored("Ammeter Current --> " + str(ammeter_current) + "A", "cyan"))
+            print(colored("Current Delta --> " + str(abs(ammeter_current - previous_current)) + "A", "cyan"))
+            print(colored("Max Current Delta --> " + str(abs((current_threshold / 100.0) * previous_current)) + "A", "cyan"))
 
             # Here you have to write to file
-            f.write(str(hv_source_voltage) + "," + str(abs(ammeter_current)) + "\n")
+            f.write(str(hv_source_voltage) + sep + str(abs(ammeter_current)) + "\n")
             f.flush()
 
-            nextVoltage = actualVoltage + stepVoltage
+            #check if the ammeter_current overflows
+            if abs(ammeter_current-previous_current) > abs((current_threshold / 100.0) * previous_current):
+                #ammeter_currrent overflow
+                current_overflow = True
+                print(colored("CURRENT OVERFLOW!!!!!!!","red"))
+            else:
+                nextVoltage = actualVoltage + stepVoltage
+                previous_current = ammeter_current
+                n_steps = n_steps + 1
 
     message = "Closing the results file!!!"
     printMessage(message, "*", "*")
@@ -364,6 +411,7 @@ if __name__ == '__main__':
     initialVoltage, \
     finalVoltage, \
     pointsVoltage, \
+    measureDelay_ms, \
     rampVoltage, \
     outputCurrentLimit, \
     enableKill, \
@@ -373,21 +421,40 @@ if __name__ == '__main__':
     resultsFilePath, \
     resultsFilePathExtension = readConfigFile(process_config_file_path)
 
-    counter = 0
+    # print(measureDelay_ms)
+    # exit(0)
 
-    while True:
-        start_process(K2400_gpibAddress,
-                      HVSource_gpibAddress,
-                      initialVoltage,
-                      finalVoltage,
-                      pointsVoltage,
-                      rampVoltage,
-                      outputCurrentLimit,
-                      enableKill,
-                      ammeterRange,
-                      ammeterCompliance,
-                      ammeterNPLCs,
-                      resultsFilePath + str(counter) + "." + resultsFilePathExtension)
-        counter += 1
+    # counter = 0
+    #
+    # while True:
+    #     start_process(K2400_gpibAddress,
+    #                   HVSource_gpibAddress,
+    #                   initialVoltage,
+    #                   finalVoltage,
+    #                   pointsVoltage,
+    #                   measureDelay_ms,
+    #                   rampVoltage,
+    #                   outputCurrentLimit,
+    #                   enableKill,
+    #                   ammeterRange,
+    #                   ammeterCompliance,
+    #                   ammeterNPLCs,
+    #                   resultsFilePath + str(counter) + "." + resultsFilePathExtension)
+    #     counter += 1
+
+    dut_reference = ""
+    start_process(K2400_gpibAddress,
+                  HVSource_gpibAddress,
+                  initialVoltage,
+                  finalVoltage,
+                  pointsVoltage,
+                  measureDelay_ms,
+                  rampVoltage,
+                  outputCurrentLimit,
+                  enableKill,
+                  ammeterRange,
+                  ammeterCompliance,
+                  ammeterNPLCs,
+                  resultsFilePath + str(dut_reference) + "." + resultsFilePathExtension)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
