@@ -267,7 +267,7 @@ def setHVOutputVoltage(hv_source, targetVoltage, voltageStabilizationTimeout=10)
         print(colored("Setting the H Source to --> " + "U," + "{:.3f}".format(targetVoltage) + "kV", "yellow"))
         sendCommandToInstrument(hv_source, "U," + "{:.3f}".format(targetVoltage) + "kV", term, 0, 0.5)
         print(colored("Waiting for voltage stabilization...", "grey", "on_white"))
-        hvSource_OutputVoltageStabilization_Success = waitForVoltageStabilization(hv_source, targetVoltage*1000, 10, 1, 1,
+        hvSource_OutputVoltageStabilization_Success = waitForVoltageStabilization(hv_source, targetVoltage*1000, 20, 0.5, 1,
                                                                                    voltageStabilizationTimeout)  # maxAbsolutePermissibleError is 10V
         if not hvSource_OutputVoltageStabilization_Success:
             print(colored(
@@ -326,7 +326,7 @@ def start_process(K2400_gpibAddress,
     n_steps = 0
 
     #current threshold in percent of current value
-    current_threshold = 5000
+    current_threshold = 10000
     current_overflow = False
 
     #file format
