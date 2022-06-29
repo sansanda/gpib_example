@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+
 os.system('color')
 
 from time import sleep
@@ -31,8 +32,8 @@ def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     k2400 = None
 
     k2400 = rm.open_resource("GPIB0::" + str(k2400_gpibAddress) + "::INSTR", send_end=True)
-    k2400.timeout = 25000 #si configuramos el k2400 con filtro y nplcs altos, necesitaremos tiempos de timeout altos tambien
-    #sleep(delay)
+    k2400.timeout = 25000  # si configuramos el k2400 con filtro y nplcs altos, necesitaremos tiempos de timeout altos tambien
+    # sleep(delay)
 
     sendCommandToInstrument(k2400, "*IDN?", "", 0, delay)
     response = k2400.read_raw()  # type(response) =--> bytes
@@ -40,7 +41,7 @@ def getInstruments(k2400_gpibAddress, hvSource_gpibAddress):
     print(decoded_response)
 
     hv_source = rm.open_resource("GPIB0::" + str(hvSource_gpibAddress) + "::INSTR", send_end=True)
-    #sleep(delay)
+    # sleep(delay)
 
     sendCommandToInstrument(hv_source, "ID", "", 0, delay)
     response = hv_source.read_raw()  # type(response) =--> bytes
@@ -63,7 +64,7 @@ def printMessage(message, headerStr, footerStr):
 
 
 def initializeK2400(k2400, compliance, nplcs, range):
-    delay = 0.25 #seconds
+    delay = 0.25  # seconds
     term = ""
 
     message = "Initializing the K2400 as Ampermeter....."
@@ -95,27 +96,27 @@ def initializeK2400(k2400, compliance, nplcs, range):
     sleep(delay)
     sendCommandToInstrument(k2400, ":FORM:ELEM VOLT, CURR, TIME", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:FUNC:CONC ON", term, 0, delay)
-    sleep(delay)
+    # sendCommandToInstrument(k2400, ":SENS:FUNC:CONC ON", term, 0, delay)
+    # sleep(delay)
     sendCommandToInstrument(k2400, ":SENS:FUNC:OFF:ALL", term, 0, delay)
     sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:FUNC:ON 'VOLT','CURR'", term, 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:FUNC:ON 'CURR'", term, 0, delay)
     sleep(delay)
     sendCommandToInstrument(k2400, ":SENS:CURR:NPLC " + str(int(nplcs)), term, 0, delay)
     sleep(delay)
 
+    sendCommandToInstrument(k2400, ":SENSe:AVERage:TCONtrol REPeat", term, 0, delay)
+    sleep(delay)
+    sendCommandToInstrument(k2400, ":SENSe:AVERage:COUNt 8", term, 0, delay)
+    sleep(delay)
+    sendCommandToInstrument(k2400, ":SENSe:AVERage ON", term, 0, delay)
+    sleep(delay)
 
-    sendCommandToInstrument(k2400,":SENSe:AVERage:TCONtrol REPeat", term, 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:CURR:RANG " + "{:.8f}".format(range), term, 0, delay)  # AMPS
     sleep(delay)
-    sendCommandToInstrument(k2400,":SENSe:AVERage:COUNt 8", term, 0, delay)
-    sleep(delay)
-    sendCommandToInstrument(k2400,":SENSe:AVERage ON", term, 0, delay)
+    sendCommandToInstrument(k2400, ":SENS:CURR:PROT " + "{:.8f}".format(compliance), term, 0, delay)  # AMPS
     sleep(delay)
 
-    sendCommandToInstrument(k2400, ":SENS:CURR:PROT " + "{:.4f}".format(compliance), term, 0, delay)  # AMPS
-    sleep(delay)
-    sendCommandToInstrument(k2400, ":SENS:CURR:RANG " + "{:.4f}".format(range), term, 0, delay)  # AMPS
-    sleep(delay)
     sendCommandToInstrument(k2400, ":ROUTE:TERM REAR", term, 0, delay)
     sleep(delay)
     # K2400 ON
@@ -191,8 +192,9 @@ def readVoltageFromHVSource(hv_source, delay=0.5):
 
     return voltage
 
+
 def waitForVoltageStabilization(hv_source, desiredVoltage, maxAbsolutePermissibleError, checkPeriod, lastDelay,
-                                 voltageStabilizationTimeout=10):
+                                voltageStabilizationTimeout=10):
     """
     Funcion sincrona cuya funcion basica es esperar a que la salida de tension de una fuente de alimentacion (en nuestro caso una hv_voltage)
     entre dentro del rango de error permisible. Una vez la salida se encuentra dentro de dicho rango de error la funcion retorna True.
@@ -267,8 +269,9 @@ def setHVOutputVoltage(hv_source, targetVoltage, voltageStabilizationTimeout=10)
         print(colored("Setting the H Source to --> " + "U," + "{:.3f}".format(targetVoltage) + "kV", "yellow"))
         sendCommandToInstrument(hv_source, "U," + "{:.3f}".format(targetVoltage) + "kV", term, 0, 0.5)
         print(colored("Waiting for voltage stabilization...", "grey", "on_white"))
-        hvSource_OutputVoltageStabilization_Success = waitForVoltageStabilization(hv_source, targetVoltage*1000, 20, 0.5, 1,
-                                                                                   voltageStabilizationTimeout)  # maxAbsolutePermissibleError is 10V
+        hvSource_OutputVoltageStabilization_Success = waitForVoltageStabilization(hv_source, targetVoltage * 1000, 20,
+                                                                                  0.5, 1,
+                                                                                  voltageStabilizationTimeout)  # maxAbsolutePermissibleError is 10V
         if not hvSource_OutputVoltageStabilization_Success:
             print(colored(
                 "Voltage Stabilization WatchDog has raised an exception. Voltage stabilization is taking too much time...",
@@ -288,27 +291,24 @@ def start_process(K2400_gpibAddress,
                   ammeterCompliance,
                   ammeterNPLCs,
                   resultsFilePath):
-
     delay = 0.5  # in s
     term = ""
 
     k2400, hv_source = getInstruments(K2400_gpibAddress, HVSource_gpibAddress)
 
-
-    #!!!!!!!!!MUY IMPORTANTE. PARA PROTEGER LA TENSION QUE VEN LOS BORNES DEL AMPERIMETRO!!!!!!!!!!!!!!
-    #SIEMPRE AMMETER ON ANTES DE APLICAR VOLTAJE O INICIALIZAR LA FUENTE QUE PUEDE TENER VOLTAJE ALTO ANTES DE EMPEZAR EL PROCESO
+    # !!!!!!!!!MUY IMPORTANTE. PARA PROTEGER LA TENSION QUE VEN LOS BORNES DEL AMPERIMETRO!!!!!!!!!!!!!!
+    # SIEMPRE AMMETER ON ANTES DE APLICAR VOLTAJE O INICIALIZAR LA FUENTE QUE PUEDE TENER VOLTAJE ALTO ANTES DE EMPEZAR EL PROCESO
 
     # K2400 ON
     sendCommandToInstrument(k2400, ":OUTP:STAT ON", term, 0, delay)
 
-    #importante inicializar primero la fuente de voltage para bajar a cero antes de inicializar el amperimetro
+    # importante inicializar primero la fuente de voltage para bajar a cero antes de inicializar el amperimetro
     initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill)
     initializeK2400(k2400, ammeterCompliance, ammeterNPLCs, ammeterRange)
 
-
     # #calculo del step voltage
-    stepVoltage = (finalVoltage - initialVoltage) / pointsVoltage
-    nextVoltage = initialVoltage
+    step_voltage = (finalVoltage - initialVoltage) / pointsVoltage
+    next_voltage = initialVoltage
 
     finalProcess = False
 
@@ -319,33 +319,34 @@ def start_process(K2400_gpibAddress,
     f = open(resultsFilePath, "a")
     f.truncate(0)
 
-    #mean_current calculation
+    # mean_current calculation
     previous_current = 0.0
     sum_current = 0.0
     mean_current = 0.0
     n_steps = 0
 
-    #current threshold in percent of current value
-    current_threshold = 10000
-    current_overflow = False
+    # current threshold in percent of current value
+    maxCurrentDelta_inTimesOfPreviousCurrent = 20
+    is_current_overflow = False
 
-    #file format
+    # file format
     sep = "\t"
 
     while not finalProcess:
 
-        if nextVoltage > finalVoltage or current_overflow:
+        if next_voltage > finalVoltage or is_current_overflow:
             finalProcess = True
 
         else:
 
-            setHVOutputVoltage(hv_source, nextVoltage/1000, voltageStabilizationTimeout)
+            setHVOutputVoltage(hv_source, next_voltage / 1000, voltageStabilizationTimeout)
 
-            print(colored("Waiting for measure delay = " + str(measureDelay_ms/1000) + " seconds", "grey", "on_white"))
-            sleep(measureDelay_ms/1000)
+            print(
+                colored("Waiting for measure delay = " + str(measureDelay_ms / 1000) + " seconds", "grey", "on_white"))
+            sleep(measureDelay_ms / 1000)
 
             # Una vez el voltaje de la fuente es estable a su salida podremos considerar que actualvoltage = nextvoltage
-            actualVoltage = nextVoltage
+            actual_voltage = next_voltage
 
             # Here you have to measure the hv_source volatge
             hv_source_voltage = readVoltageFromHVSource(hv_source)
@@ -359,25 +360,37 @@ def start_process(K2400_gpibAddress,
             ammeter_decoded_response = ammeter_decoded_response.split(",")
 
             ammeter_current = float(ammeter_decoded_response[1])
+
+            #Al estar el smu en modo amperimetro, el signo de la corriente es negativo
+            #invertimos el signo de la corriente para trabajar mejor
+            ammeter_current = -ammeter_current
+
             if n_steps == 0:
                 previous_current = ammeter_current
 
             print(colored("Previous Current --> " + str(previous_current) + "A", "cyan"))
             print(colored("Ammeter Current --> " + str(ammeter_current) + "A", "cyan"))
-            print(colored("Current Delta --> " + str(abs(ammeter_current - previous_current)) + "A", "cyan"))
-            print(colored("Max Current Delta --> " + str(abs((current_threshold / 100.0) * previous_current)) + "A", "cyan"))
+            print(colored("Current Delta --> " + str(ammeter_current - previous_current) + "A", "cyan"))
+            print(colored(
+                "Max Current Delta --> " + str(abs(maxCurrentDelta_inTimesOfPreviousCurrent * previous_current)) + "A",
+                "cyan"))
 
             # Here you have to write to file
             f.write(str(hv_source_voltage) + sep + str(abs(ammeter_current)) + "\n")
             f.flush()
 
-            #check if the ammeter_current overflows
-            if abs(ammeter_current-previous_current) > abs((current_threshold / 100.0) * previous_current):
-                #ammeter_currrent overflow
-                current_overflow = True
-                print(colored("CURRENT OVERFLOW!!!!!!!","red"))
-            else:
-                nextVoltage = actualVoltage + stepVoltage
+            # check if the ammeter_current overflows
+
+            current_delta = ammeter_current - previous_current
+
+            if current_delta > 0:
+                if abs(current_delta) > abs(maxCurrentDelta_inTimesOfPreviousCurrent * previous_current):
+                    # ammeter_currrent overflow
+                    is_current_overflow = True
+                    print(colored("CURRENT OVERFLOW!!!!!!!", "red"))
+
+            if not is_current_overflow:
+                next_voltage = actual_voltage + step_voltage
                 previous_current = ammeter_current
                 n_steps = n_steps + 1
 
@@ -403,7 +416,6 @@ def start_process(K2400_gpibAddress,
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-
     process_config_file_path = "process_config_file.json"
 
     K2400_gpibAddress, \
