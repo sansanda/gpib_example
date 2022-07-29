@@ -152,7 +152,6 @@ def initializeHVSource(hv_source, rampVoltage, outputCurrentLimit, enableKill):
     # set kill enable
     sendCommandToInstrument(hv_source, "KILL," + 'EN' if enableKill else 'DIS', term, 0, delay)
     sleep(delay)
-
     # Setting output voltage to zero
     setHVOutputVoltage(hv_source, 0, 60)
 
@@ -326,7 +325,7 @@ def start_process(K2400_gpibAddress,
     n_steps = 0
 
     # current threshold in percent of current value
-    maxCurrentDelta_inTimesOfPreviousCurrent = 20
+    maxCurrentDelta_inTimesOfPreviousCurrent = 100 #20
     is_current_overflow = False
 
     # file format
