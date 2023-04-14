@@ -21,5 +21,5 @@ def readConfigFile(configFilePath):
             jsonContent["ammeterRange"],
             jsonContent["ammeterCompliance"],
             jsonContent["ammeterNPLCs"],
-            jsonContent["resultsFilePath"],
-            jsonContent["resultsFilePathExtension"])
+            jsonContent["resultsFileName"],
+            jsonContent["resultsFileExtension"])

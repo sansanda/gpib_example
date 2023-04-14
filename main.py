@@ -429,8 +429,8 @@ if __name__ == '__main__':
     ammeterRange, \
     ammeterCompliance, \
     ammeterNPLCs, \
-    resultsFilePath, \
-    resultsFilePathExtension = readConfigFile(process_config_file_path)
+    resultsFileName, \
+    resultsFileExtension = readConfigFile(process_config_file_path)
 
     # print(measureDelay_ms)
     # exit(0)
@@ -450,10 +450,9 @@ if __name__ == '__main__':
     #                   ammeterRange,
     #                   ammeterCompliance,
     #                   ammeterNPLCs,
-    #                   resultsFilePath + str(counter) + "." + resultsFilePathExtension)
+    #                   resultsFileName + str(counter) + "." + resultsFileExtension)
     #     counter += 1
 
-    dut_reference = ""
     start_process(K2400_gpibAddress,
                   HVSource_gpibAddress,
                   initialVoltage,
@@ -466,6 +465,4 @@ if __name__ == '__main__':
                   ammeterRange,
                   ammeterCompliance,
                   ammeterNPLCs,
-                  resultsFilePath + str(dut_reference) + "." + resultsFilePathExtension)
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+                  resultsFileName + "." + resultsFileExtension)
